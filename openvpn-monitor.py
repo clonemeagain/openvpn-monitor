@@ -45,11 +45,12 @@ try:
 except ImportError:
     geoip2_available = False
 
-import socket
-import re
 import argparse
-import sys
 import os
+import re
+import socket
+import string
+import sys
 from datetime import datetime
 from humanize import naturalsize
 from collections import OrderedDict, deque
@@ -448,9 +449,14 @@ class OpenvpnMgmtInterface(object):
 
             if routes_section:
                 local_ip = parts[1]
+                remote_ip = parts[2]
                 last_seen = parts[5]
                 if local_ip in sessions:
                     sessions[local_ip]['last_seen'] = get_date(last_seen, uts=True)
+                elif self.is_mac_address(local_ip):
+                    sessions = [s for s in sessions if remote_ip == self.get_remote_address(s['remote_ip'], s['port'])]
+                    if len(sessions) == 1:
+                        sessions[0]['last_seen'] = get_date(last_seen, uts=True)
 
         if args.debug:
             if sessions:
@@ -466,6 +472,18 @@ class OpenvpnMgmtInterface(object):
         for line in data.splitlines():
             if line.startswith('OpenVPN'):
                 return line.replace('OpenVPN Version: ', '')
+
+    @staticmethod
+    def is_mac_address(s):
+        return len(s.split(':')) == 6 and \
+            all(c in string.hexdigits for c in s.replace(':', ''))
+
+    @staticmethod
+    def get_remote_address(ip, port):
+        if port:
+            return '{0!s}:{1!s}'.format(ip, port)
+        else:
+            return ip
 
 
 class OpenvpnHtmlPrinter(object):
